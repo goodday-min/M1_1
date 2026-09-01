@@ -36,12 +36,12 @@ cells.append(md(
 
 PRD: `claude/PRD.md` 참고 (S&P500 / 나스닥100 / 나스닥100 2배 레버리지 ETF 비교)
 
-**핵심 질문**
+**핵심 질문** (유사·연결되는 질문끼리 이어지도록 순서 구성)
 1. 공통구간(2006~2026) 누적수익률·CAGR 비교
-2. QLD 실제 수익률 vs QQQ×2 이론값 괴리 (변동성 드래그)
-3. 2008/2020/2022 위기 구간 MDD·회복기간 비교
-4. QQQ vs SPY 수익률 격차의 시기별 변화
-5. 변동성 대비 수익률 — 레버리지가 항상 유리한가?
+2. 2008/2020/2022 위기 구간 MDD·회복기간 비교
+3. QQQ vs SPY 수익률 격차의 시기별 변화 (질문2의 2022년 역전 현상을 이어서 설명)
+4. QLD 실제 수익률 vs QQQ×2 이론값 괴리 (변동성 드래그)
+5. 변동성 대비 수익률 — 레버리지가 항상 유리한가? (질문4의 괴리 메커니즘을 이어서 "그래서 유리한가"로 결론)
 6. *(추가, 주제 4)* 적립식(매월 정액) vs 거치식(일시) 투자 — "언제 사느냐가 얼마나 중요한가?"
 
 **주의**: 이 노트북은 `data/fetch_data.py`를 먼저 실행해 `data/raw/*.csv`와
@@ -147,9 +147,16 @@ outlier_dates = daily_returns.loc[outlier_flags["QQQ"], "QQQ"].sort_values().ind
 outlier_dates[:10]"""
 ))
 
-cells.append(md("## 4. 시계열 기법 적용"))
+cells.append(md(
+"""## 4. 시계열 기법 적용
 
-cells.append(md("### 4-1. 정규화 누적수익률 (로그스케일 인덱싱)\n\n공통구간 시작일을 100으로 맞춰 SPY/QQQ/QLD를 동일 조건에서 비교한다."))
+유사하거나 서로 이어지는 질문끼리 묶어서 순서를 구성했다: 전체 수익률 개요(질문1) →
+위기별 낙폭 비교(질문2) → 그 중 2022년 QQQ vs SPY 역전 현상을 깊이 보는 금리국면 분석(질문3) →
+레버리지(QLD) 괴리 메커니즘(질문4) → 그래서 레버리지가 위험조정 기준으로 유리한가(질문5) →
+마지막으로 투자 방식(적립식 vs 거치식, 질문6)."""
+))
+
+cells.append(md("### 4-1. 정규화 누적수익률 (로그스케일 인덱싱) — 질문 1\n\n공통구간 시작일을 100으로 맞춰 SPY/QQQ/QLD를 동일 조건에서 비교한다."))
 
 cells.append(code(
 """fig, ax = plt.subplots()
@@ -175,7 +182,7 @@ summary_df = pd.DataFrame(summary_rows).set_index("ticker")
 summary_df"""
 ))
 
-cells.append(md("### 4-2. 이동평균선 (50일/200일) — 골든크로스·데드크로스"))
+cells.append(md("### 4-2. 이동평균선 (50일/200일) — 골든크로스·데드크로스 (질문 1 보조)"))
 
 cells.append(code(
 """target = "QQQ"
@@ -198,7 +205,7 @@ plt.show()
 print(f"골든크로스 {crossed['golden_cross'].sum()}회, 데드크로스 {crossed['dead_cross'].sum()}회")"""
 ))
 
-cells.append(md("### 4-3. 낙폭(Drawdown) Underwater 차트 & 최대낙폭(MDD)"))
+cells.append(md("### 4-3. 낙폭(Drawdown) Underwater 차트 & 최대낙폭(MDD) — 질문 2"))
 
 cells.append(code(
 """fig, ax = plt.subplots()
@@ -243,19 +250,23 @@ crisis_mdd_df = pd.DataFrame(crisis_mdd_rows).set_index(["crisis", "ticker"])
 crisis_mdd_df"""
 ))
 
-cells.append(md("### 4-4. 롤링 변동성(연율화) & QLD 실제 vs QQQ×2 이론값 괴리"))
+cells.append(md("### 4-4. 연도별 수익률 비교 — 질문 3\n\n질문 2(위기별 낙폭)에서 확인된 \"2022년 QQQ가 SPY보다 더 하락\"이라는 관찰을 이어서, 연도별로 두 상품의 격차가 어떻게 벌어지고 좁혀지는지를 본다."))
 
 cells.append(code(
-"""fig, ax = plt.subplots()
-for t in TICKERS:
-    vol = m.rolling_volatility(common_clean[t], window=63)
-    ax.plot(vol.index, vol.values, label=t)
-ax.set_title("롤링 변동성 (63거래일, 연율화 %)")
-ax.set_ylabel("Annualized Volatility (%)")
-ax.legend()
-plt.savefig(os.path.join(FIG_DIR, "04_rolling_volatility.png"), dpi=120, bbox_inches="tight")
-plt.show()"""
+"""annual_returns = common_clean.resample("YE").last().pct_change().dropna() * 100
+annual_returns.index = annual_returns.index.year
+
+ax = annual_returns.plot(kind="bar", figsize=(13, 5))
+ax.set_title("연도별 수익률 비교 (SPY / QQQ / QLD)")
+ax.set_ylabel("Annual Return (%)")
+ax.axhline(0, color="black", linewidth=0.8)
+plt.savefig(os.path.join(FIG_DIR, "06_annual_returns_bar.png"), dpi=120, bbox_inches="tight")
+plt.show()
+
+annual_returns"""
 ))
+
+cells.append(md("### 4-5. QLD 실제 vs QQQ×2 이론값 괴리 — 질문 4\n\n레버리지 상품(QLD)이 이론상 기대치(QQQ×2)와 실제로 얼마나 차이 나는지, 그 메커니즘(변동성 드래그)을 본다."))
 
 cells.append(code(
 """gap_df = m.leveraged_gap(common_clean["QQQ"], common_clean["QLD"], leverage=2.0)
@@ -279,24 +290,22 @@ plt.show()
 print("최종 시점 괴리율:", f"{gap_df['gap_pct'].iloc[-1]:.2f}%")"""
 ))
 
-cells.append(md("### 4-5. 연도별 수익률 비교"))
+cells.append(md("### 4-6. 롤링 변동성(연율화) — 질문 5\n\n질문 4에서 본 레버리지 괴리 메커니즘을 바탕으로, \"그래서 레버리지가 위험 대비 유리한가\"를 보기 위한 변동성 크기 비교."))
 
 cells.append(code(
-"""annual_returns = common_clean.resample("YE").last().pct_change().dropna() * 100
-annual_returns.index = annual_returns.index.year
-
-ax = annual_returns.plot(kind="bar", figsize=(13, 5))
-ax.set_title("연도별 수익률 비교 (SPY / QQQ / QLD)")
-ax.set_ylabel("Annual Return (%)")
-ax.axhline(0, color="black", linewidth=0.8)
-plt.savefig(os.path.join(FIG_DIR, "06_annual_returns_bar.png"), dpi=120, bbox_inches="tight")
-plt.show()
-
-annual_returns"""
+"""fig, ax = plt.subplots()
+for t in TICKERS:
+    vol = m.rolling_volatility(common_clean[t], window=63)
+    ax.plot(vol.index, vol.values, label=t)
+ax.set_title("롤링 변동성 (63거래일, 연율화 %)")
+ax.set_ylabel("Annualized Volatility (%)")
+ax.legend()
+plt.savefig(os.path.join(FIG_DIR, "04_rolling_volatility.png"), dpi=120, bbox_inches="tight")
+plt.show()"""
 ))
 
 cells.append(md(
-"""### 4-6. 적립식(DCA) vs 거치식(Lump-sum) 투자 비교 (분석 주제 모음 — 주제 4)
+"""### 4-7. 적립식(DCA) vs 거치식(Lump-sum) 투자 비교 (분석 주제 모음 — 주제 4) — 질문 6
 
 "언제 사느냐가 얼마나 중요한가?"에 대한 실증 비교. 매월 첫 거래일에 정액(월 50만원)을
 투자하는 적립식(DCA)과, 그 총 투자원금을 구간 시작일에 한 번에 투자하는 거치식(Lump-sum)을
@@ -348,9 +357,9 @@ cells.append(md(
 실제 데이터(2006-06-21~2026-08-25 공통구간) 실행 결과 기준. 전체 서술은 `REPORT.md` §6 참고.
 
 - **인사이트 1 (질문1)**: 관찰 — 누적수익률 SPY 784.80%/QQQ 2,048.91%/QLD 8,936.17%, CAGR 11.41%/16.42%/25.01%, 변동성도 같은 순서로 19.38%/22.08%/43.96%. 해석 — 초과수익은 그만큼의 변동성을 대가로 한다.
-- **인사이트 2 (질문2)**: 관찰 — QLD 실제 vs QQQ×2 이론값 최종 괴리율 -47.44%, 그래프상 선형적으로 꾸준히 벌어짐(위기 구간에서 가속). 해석 — 변동성 드래그는 사건이 아니라 매일 재조정되는 구조에서 누적되는 현상.
-- **인사이트 3 (질문3)**: 관찰 — 2008년 QLD -83.13%(회복 1,106일)로 최대, 2022년은 QQQ(-34.83%)가 SPY(-24.50%)보다 더 하락해 순위가 뒤바뀜. 해석 — 위기 원인(신용위기 vs 금리인상)에 따라 가장 취약한 상품이 다름.
-- **인사이트 4 (질문4)**: 관찰 — 장기적으론 QQQ가 SPY를 크게 앞서지만(2,048.91% vs 784.80%), 2022년 한 해는 QQQ가 더 크게 하락. 해석 — 저금리기 기술주 프리미엄이 금리인상기엔 페널티로 반전.
+- **인사이트 2 (질문2)**: 관찰 — 2008년 QLD -83.13%(회복 1,106일)로 최대, 2022년은 QQQ(-34.83%)가 SPY(-24.50%)보다 더 하락해 순위가 뒤바뀜. 해석 — 위기 원인(신용위기 vs 금리인상)에 따라 가장 취약한 상품이 다름.
+- **인사이트 3 (질문3)**: 관찰 — 장기적으론 QQQ가 SPY를 크게 앞서지만(2,048.91% vs 784.80%), 2022년 한 해는 QQQ가 더 크게 하락. 해석 — 저금리기 기술주 프리미엄이 금리인상기엔 페널티로 반전.
+- **인사이트 4 (질문4)**: 관찰 — QLD 실제 vs QQQ×2 이론값 최종 괴리율 -47.44%, 그래프상 선형적으로 꾸준히 벌어짐(위기 구간에서 가속). 해석 — 변동성 드래그는 사건이 아니라 매일 재조정되는 구조에서 누적되는 현상.
 - **인사이트 5 (질문5)**: 관찰 — CAGR/변동성 비율이 SPY 0.589, QQQ 0.744, QLD 0.569로 QLD가 절대수익 1위임에도 위험조정 기준으론 최하위권. 해석 — 레버리지가 "항상 유리"한 건 아니며 -83% MDD를 버틸 수 있는지가 더 중요한 변수.
 - **인사이트 6 (질문6, 주제4)**: 관찰 — 동일 총투자금(월 50만원×243개월=1억 2,150만원) 기준, 거치식 수익률이 SPY 775.28%, QQQ 2,016.71%, QLD 8,714.34%로 적립식(376.69%/763.97%/3,537.22%)을 세 상품 모두에서 큰 차이로 앞섰다. 해석 — 20년 대부분이 상승장이었던 이번 구간에서는 돈을 더 일찍, 더 오래 시장에 노출시킨 거치식이 유리했다. 다만 이는 "거치식이 항상 우월하다"는 뜻이 아니라, 이 결과 자체가 표본 기간이 상승장 편향임을 보여주는 방증이며, 적립식의 실질적 가치는 최종 수익률이 아니라 (하락장 초입에 목돈을 한 번에 넣는) 매수 타이밍 리스크를 분산시키는 데 있다."""
 ))
@@ -430,7 +439,8 @@ cells.append(md(
 - [x] §5 인사이트 섹션을 실제 수치 기반으로 완성
 - [x] `REPORT.md` 작성 (분석 주제/질문/데이터 설명/시각화/인사이트/결론·한계/보너스 결과/AI 사용 로그)
 - [x] 보너스 A: `dashboard.py` (Streamlit) 구현
-- [x] 추가 분석(주제 4): 적립식(DCA) vs 거치식(Lump-sum) 비교 (§4-6, 인사이트 6)
+- [x] 추가 분석(주제 4): 적립식(DCA) vs 거치식(Lump-sum) 비교 (§4-7, 인사이트 6)
+- [x] 핵심 질문 1~6 순서 재배열 (유사·연결되는 질문끼리 이어지도록: 1→2→3→4→5→6)
 - [ ] GitHub 저장소 정리 및 제출"""
 ))
 
